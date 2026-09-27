@@ -7,7 +7,12 @@
 // [System One] and [primitives].
 //
 // Create a client with [New]. The API key comes from [WithAPIKey] or from
-// the TYPESAFE_API_KEY environment variable.
+// the TYPESAFE_API_KEY environment variable. Set [WithProvider] "openjev"
+// (or JEV_PROVIDER=openjev) to use [OpenJEV], a free community gateway to
+// the same Jev model, which reads OPENJEV_API_KEY instead. TypeSafe stays
+// the default; anyone with a TypeSafe key sees no change.
+//
+// [OpenJEV]: https://openjev.sh
 //
 //	client, err := jev.New()
 //	resp, err := client.SystemOne(ctx, jev.Request{

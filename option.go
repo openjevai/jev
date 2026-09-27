@@ -11,14 +11,21 @@ import (
 )
 
 const (
-	defaultBaseURL = "https://api.typesafe.ai"
-	defaultModel   = "jev-latest"
-	defaultTimeout = 10 * time.Second
+	defaultBaseURL  = "https://api.typesafe.ai"
+	defaultModel    = "jev-latest"
+	openjevBaseURL  = "https://api.openjev.sh"
+	openjevModel    = "openjev"
+	defaultTimeout  = 10 * time.Second
 
-	envAPIKey   = "TYPESAFE_API_KEY"
-	envBaseURL  = "TYPESAFE_BASE_URL"
-	envModel    = "TYPESAFE_DEFAULT_MODEL"
-	envLogLevel = "TYPESAFE_LOG_LEVEL"
+	providerTypeSafe = "typesafe"
+	providerOpenJEV  = "openjev"
+
+	envAPIKey     = "TYPESAFE_API_KEY"
+	envBaseURL    = "TYPESAFE_BASE_URL"
+	envModel      = "TYPESAFE_DEFAULT_MODEL"
+	envLogLevel   = "TYPESAFE_LOG_LEVEL"
+	envProvider   = "JEV_PROVIDER"
+	envOpenJEVKey = "OPENJEV_API_KEY"
 )
 
 // Option configures a [Client]. Pass options to [New], or to a single call.
@@ -32,6 +39,7 @@ const (
 type Option func(*config) error
 
 type config struct {
+	provider   string
 	apiKey     string
 	baseURL    string
 	model      string
@@ -115,6 +123,41 @@ func WithModel(model string) Option {
 		}
 		cfg.model = model
 		return nil
+	}
+}
+
+// WithProvider selects the API provider: "typesafe" (the default, unchanged) or
+// "openjev", a free community gateway to the same Jev model.
+//
+// The default is the JEV_PROVIDER environment variable, then automatic
+// detection: TypeSafe when TYPESAFE_API_KEY is set, otherwise OpenJEV when
+// OPENJEV_API_KEY is set, otherwise TypeSafe. Anyone with a TypeSafe key sees
+// zero behaviour change.
+//
+// When the provider is "openjev" and the key, base URL, or model are not set
+// explicitly, they default to OPENJEV_API_KEY, https://api.openjev.sh, and
+// "openjev" respectively. TypeSafe env vars (TYPESAFE_BASE_URL,
+// TYPESAFE_DEFAULT_MODEL) still override the base URL and model for either
+// provider.
+//
+// See [OpenJEV] for the gateway and [TypeSafe] for the direct API.
+//
+// [OpenJEV]: https://openjev.sh
+// [TypeSafe]: https://typesafe.ai
+func WithProvider(provider string) Option {
+	return func(cfg *config) error {
+		provider = strings.TrimSpace(strings.ToLower(provider))
+		if provider == "" {
+			return nil
+		}
+		switch provider {
+		case providerTypeSafe, providerOpenJEV:
+			cfg.provider = provider
+			return nil
+		default:
+			return fmt.Errorf("%w: unknown provider %q, want %q or %q",
+				ErrConfig, provider, providerTypeSafe, providerOpenJEV)
+		}
 	}
 }
 
@@ -210,21 +253,47 @@ func WithLogger(logger *slog.Logger) Option {
 }
 
 func (cfg *config) resolve() error {
-	if cfg.apiKey == "" {
-		cfg.apiKey = strings.TrimSpace(os.Getenv(envAPIKey))
+	// Resolve provider: explicit option > JEV_PROVIDER env > auto-detect.
+	// TypeSafe stays the default; anyone with TYPESAFE_API_KEY set gets it.
+	if cfg.provider == "" {
+		cfg.provider = strings.TrimSpace(strings.ToLower(os.Getenv(envProvider)))
+	}
+	if cfg.provider == "" {
+		switch {
+		case strings.TrimSpace(os.Getenv(envAPIKey)) != "":
+			cfg.provider = providerTypeSafe
+		case strings.TrimSpace(os.Getenv(envOpenJEVKey)) != "":
+			cfg.provider = providerOpenJEV
+		default:
+			cfg.provider = providerTypeSafe
+		}
+	}
+
+	// API key: explicit option > the selected provider's env var.
+	keyEnv := envAPIKey
+	if cfg.provider == providerOpenJEV {
+		keyEnv = envOpenJEVKey
 	}
 	if cfg.apiKey == "" {
-		return fmt.Errorf("%w: set WithAPIKey or %s", ErrConfig, envAPIKey)
+		cfg.apiKey = strings.TrimSpace(os.Getenv(keyEnv))
+	}
+	if cfg.apiKey == "" {
+		return fmt.Errorf("%w: set WithAPIKey or %s", ErrConfig, keyEnv)
 	}
 	if strings.ContainsAny(cfg.apiKey, " \r\n") {
 		return fmt.Errorf("%w: API key contains whitespace", ErrConfig)
 	}
 
+	// Base URL: explicit option > TYPESAFE_BASE_URL > provider default.
 	if cfg.baseURL == "" {
 		cfg.baseURL = strings.TrimSpace(os.Getenv(envBaseURL))
 	}
 	if cfg.baseURL == "" {
-		cfg.baseURL = defaultBaseURL
+		if cfg.provider == providerOpenJEV {
+			cfg.baseURL = openjevBaseURL
+		} else {
+			cfg.baseURL = defaultBaseURL
+		}
 	}
 	parsed, err := parseBaseURL(cfg.baseURL)
 	if err != nil {
@@ -232,11 +301,16 @@ func (cfg *config) resolve() error {
 	}
 	cfg.baseURL = parsed
 
+	// Model: explicit option > TYPESAFE_DEFAULT_MODEL > provider default.
 	if cfg.model == "" {
 		cfg.model = strings.TrimSpace(os.Getenv(envModel))
 	}
 	if cfg.model == "" {
-		cfg.model = defaultModel
+		if cfg.provider == providerOpenJEV {
+			cfg.model = openjevModel
+		} else {
+			cfg.model = defaultModel
+		}
 	}
 
 	if cfg.timeout == 0 {

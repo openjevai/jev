@@ -8,6 +8,8 @@ Jev does not write text. You send a state (a string, or JSON such as a ticket, a
 
 This module is not affiliated with TypeSafe AI. The official clients are the [JavaScript SDK](https://github.com/typesafe-ai/typesafe-sdk-js) and the [Python SDK](https://github.com/typesafe-ai/typesafe-sdk-python). The HTTP contract is the [System One API](https://docs.typesafe.ai/api).
 
+**OpenJEV support:** Jev is built by [TypeSafe](https://typesafe.ai). This fork keeps TypeSafe as the default and adds optional support for [OpenJEV](https://openjev.sh), a free community gateway to the same Jev model — set `OPENJEV_API_KEY` (or `JEV_PROVIDER=openjev`) to use it. Original project: https://github.com/kataras/jev by @kataras.
+
 ## Install
 
 Go 1.27 or newer. The only dependency is `golang.org/x/time/rate`.
@@ -103,9 +105,10 @@ Explicit options win over environment variables. A blank environment value is ig
 
 | Option | Environment | Default |
 | --- | --- | --- |
-| `WithAPIKey` | `TYPESAFE_API_KEY` | required |
-| `WithBaseURL` | `TYPESAFE_BASE_URL` | `https://api.typesafe.ai` |
-| `WithModel` | `TYPESAFE_DEFAULT_MODEL` | `jev-latest` |
+| `WithProvider` | `JEV_PROVIDER` | auto-detect: `typesafe` when `TYPESAFE_API_KEY` is set, else `openjev` when `OPENJEV_API_KEY` is set, else `typesafe` |
+| `WithAPIKey` | `TYPESAFE_API_KEY` (or `OPENJEV_API_KEY` when provider is openjev) | required |
+| `WithBaseURL` | `TYPESAFE_BASE_URL` | `https://api.typesafe.ai` (or `https://api.openjev.sh` when provider is openjev) |
+| `WithModel` | `TYPESAFE_DEFAULT_MODEL` | `jev-latest` (or `openjev` when provider is openjev) |
 | `WithTimeout` | | 10s per attempt |
 | `WithRetry` | | 2 retries, 500ms to 5s backoff |
 | `WithRateLimit` | | 1,200 requests/min, 250,000 tokens/s |

@@ -70,6 +70,10 @@ func (c *Client) BaseURL() string { return c.cfg.baseURL }
 // [models]: https://docs.typesafe.ai/models#current-models
 func (c *Client) Model() string { return c.cfg.model }
 
+// Provider returns the API provider in use: "typesafe" (the default) or
+// "openjev". See [WithProvider].
+func (c *Client) Provider() string { return c.cfg.provider }
+
 // Limiter returns the client-side rate limiter, or nil when pacing is off.
 // Pass it to [WithRateLimiter] on another client so both share one budget,
 // which is what the per-account limits under [current models] ask for.
